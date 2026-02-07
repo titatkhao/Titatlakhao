@@ -1,0 +1,155 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jumping Louis</title>
+<style>
+  html,body{
+    margin:0;
+    background:#000;
+    color:#fff;
+    font-family:sans-serif;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+</style>
+</head>
+<body>
+<script>
+/* =====================  AUDIO  ===================== */
+const ctx = new (window.AudioContext||window.webkitAudioContext)();
+function beep(f=600,d=0.15,v=0.1,t="sine"){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.type=t;o.frequency.value=f;
+  o.connect(g);g.connect(ctx.destination);
+  g.gain.setValueAtTime(v,ctx.currentTime);
+  o.start();o.stop(ctx.currentTime+d);
+}
+function descending(start=600,end=200,dur=0.6){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.type="sine";o.connect(g);g.connect(ctx.destination);
+  o.frequency.setValueAtTime(start,ctx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(end,ctx.currentTime+dur);
+  g.gain.setValueAtTime(0.1,ctx.currentTime);
+  o.start();o.stop(ctx.currentTime+dur);
+}
+function coinAbove(){beep(1500,0.15,0.05);}
+function coinCollect(){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.type="triangle";o.connect(g);g.connect(ctx.destination);
+  o.frequency.setValueAtTime(800,ctx.currentTime);
+  o.frequency.linearRampToValueAtTime(1600,ctx.currentTime+0.25);
+  g.gain.setValueAtTime(0.12,ctx.currentTime);
+  o.start();o.stop(ctx.currentTime+0.25);
+}
+function speak(t){speechSynthesis.speak(new SpeechSynthesisUtterance(t));}
+
+/* =====================  GAME STATE  ===================== */
+let score=0,dodged=0,timer=null,obstacles=[],coins=[];
+let running=false,touchY=null,touchCount=0,firstLaunch=true;
+let autoJumpTimer=500;
+
+/* =====================  CORE LOOP  ===================== */
+function resetGame(){score=0;dodged=0;obstacles=[];coins=[];autoJumpTimer=500;}
+
+function startGame(){
+  running=true;resetGame();speak("Game started");
+  timer=setInterval(loop,50);
+  setTimeout(spawnRandom,2500);
+}
+
+function endGame(){
+  running=false;clearInterval(timer);
+  descending();
+  speak("You scored " + score + " points.");
+  setTimeout(showMenu,1500);
+}
+
+/* ==========  RANDOM SPAWN  ========== */
+function spawnRandom(){
+  if(!running)return;
+  if(Math.random()<0.7)obstacles.push({d:1,jumped:false,warn:false});
+  else coins.push({d:1,col:false,alert:false});
+  const next=Math.random()*1000+1000-(Math.min(dodged,20)*30);
+  setTimeout(spawnRandom,next);
+}
+
+/* ==========  MAIN LOOP  ========== */
+function loop(){
+  autoJumpTimer-=50;
+  if(autoJumpTimer<=0){beep(600,0.15);autoJumpTimer=500;}
+
+  obstacles.forEach(o=>o.d-=0.05);
+  coins.forEach(c=>c.d-=0.05);
+
+  for(let i=0;i<obstacles.length;i++){
+    const o=obstacles[i];
+    if(o.d<=0&&!o.jumped){endGame();return;}
+    if(o.d<=0.3&&!o.warn){beep(900,0.1);o.warn=true;}
+    if(o.d<=-0.1&&o.jumped){
+      obstacles.splice(i,1);i--;dodged++;
+      if(dodged%2===0)score++;
+    }
+  }
+
+  for(let i=0;i<coins.length;i++){
+    const c=coins[i];
+    if(c.d<=0.35&&!c.col&&!c.alert){coinAbove();c.alert=true;}
+  }
+}
+
+/* ==========  PLAYER JUMP  ========== */
+function jump(){
+  if(!running)return;
+  for(let i=0;i<coins.length;i++){
+    const c=coins[i];
+    if(c.d<=0.5&&!c.col){
+      c.col=true;coinCollect();score+=2;
+      coins.splice(i,1);i--;
+    }
+  }
+  obstacles.forEach(o=>{if(o.d<=0.5)o.jumped=true;});
+}
+
+/* =====================  INPUT  ===================== */
+document.addEventListener("touchstart",e=>{
+  touchY=e.touches[0].clientY;touchCount=e.touches.length;
+  if(!running){
+    if(touchCount===2){startGame();return;}
+  }
+});
+document.addEventListener("touchend",e=>{
+  if(touchY!==null&&running&&touchCount===1){
+    const endY=e.changedTouches[0].clientY;
+    if(touchY-endY>50)jump();
+  }
+  touchY=null;touchCount=0;
+});
+
+window.addEventListener("popstate",e=>{
+  if(running){
+    speak("Press the back button to exit the game.");
+    endGame();e.preventDefault();
+  }
+});
+
+/* =====================  MENUS  ===================== */
+function showStartup(){
+  speak("The game is loading.");
+  setTimeout(()=>{
+    speak("Please turn off your screen reader.");
+    setTimeout(showMenu,1500);
+  },1000);
+  firstLaunch=false;
+}
+function showMenu(){
+  speak("Tap with two fingers to start the game.");
+}
+
+/* =====================  STARTUP  ===================== */
+if(firstLaunch)showStartup();
+</script>
+</body>
+</html>
